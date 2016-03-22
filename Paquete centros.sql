@@ -1,11 +1,14 @@
-CREATE OR REPLACE PACKAGE CONEXIONES IS
+CREATE OR REPLACE PACKAGE PAC_CENTRO IS
+  TYPE G_CURSOR IS REF CURSOR;
   PROCEDURE insertar_centro(p_nombre in centros.nombre%type,p_provincia in CENTROS.PROVINCIA%type);
-  PROCEDURE visualizar_lista_centro;
   PROCEDURE borrar_centro(v_fuente IN CENTROS.ID%TYPE, v_destino IN CENTROS.ID%TYPE);
   PROCEDURE cambiar_provincia(p_idCentro NUMBER,p_provincia VARCHAR2);
+  PROCEDURE visualizar_lista_centro(o_cursor OUT G_CURSOR);
+  PROCEDURE visualizar_datos_centro(i_idCen IN NUMBER, o_cursor OUT G_CURSOR);
+  PROCEDURE visualizar_datos_centro(i_nomCen IN CENTRO.NOMBRE%TYPE, o_cursor OUT G_CURSOR);
   FUNCTION buscar_centro_por_nombre(v_nCentro IN CENTROS.NOMBRE%TYPE) RETURN NUMBER;
-END CONEXIONES;
-CREATE OR REPLACE PACKAGE BODY CONEXIONES IS
+END PAC_CENTRO;
+CREATE OR REPLACE PACKAGE BODY PAC_CENTRO IS
   /* PROCEDIMIENTO INSERTAR CENTRO */
     
   PROCEDURE insertar_centro(
@@ -32,28 +35,7 @@ CREATE OR REPLACE PACKAGE BODY CONEXIONES IS
       insert into centros (nombre, provincia) values (p_nombre, p_provincia);
   END;
   
-  /* PROCEDIMIENTO VISUALIZAR LISTA CENTRO */
-  
-  PROCEDURE visualizar_lista_centro
-  IS
-    cursor c1 is
-      select *
-      from centros;
-    
-    v_reg c1%rowtype;  
-  BEGIN
-    open c1;
-    
-    fetch c1 into v_reg;
-    while c1%found loop
-      DBMS_OUTPUT.PUT_LINE(v_reg.id || ' ' || v_reg.nombre || ' ' || v_reg.calle || ' ' || v_reg.numero || ' ' || v_reg.cp || ' ' || v_reg.ciudad || ' ' || v_reg.provincia || ' ' || v_reg.telefono);
-      fetch c1 into v_reg;
-    end loop;
-    
-    close c1;
-  END visualizar_lista_centro;
-  
-    --BORRAR CENTRO Y TRANSFERIR LOS TRABAJADORES A OTRO CENTRO
+  /* BORRAR CENTRO Y TRANSFERIR LOS TRABAJADORES A OTRO CENTRO */
   
   
   PROCEDURE borrar_centro(
@@ -87,8 +69,7 @@ CREATE OR REPLACE PACKAGE BODY CONEXIONES IS
       RAISE_APPLICATION_ERROR(-20112,'Error al transferir los trabajadores.');
   END;
   
-      
-      --CAMBIAR PROVINCIA
+        --CAMBIAR PROVINCIA
       
   PROCEDURE cambiar_provincia(
     p_idCentro NUMBER,
@@ -111,7 +92,7 @@ CREATE OR REPLACE PACKAGE BODY CONEXIONES IS
     EXCEPTION
       WHEN NO_DATA_FOUND THEN
         --Si se dispara esta excepción hay error, ese p_idCentro no es correcto
-        RAISE_APPLICATION_ERROR ('-20002','Error: '||sqlerrm);
+        RAISE_APPLICATION_ERROR (-20002,'Error: '||sqlerrm);
       WHEN TOO_MANY_ROWS THEN
         NULL; 
     END;		
@@ -124,13 +105,57 @@ CREATE OR REPLACE PACKAGE BODY CONEXIONES IS
     END IF;
   EXCEPTION
     WHEN e_idCentro_inexistente THEN
-      RAISE_APPLICATION_ERROR ('-20001','Err. id de Centro inexistente');
+      RAISE_APPLICATION_ERROR (-20001,'Err. id de Centro inexistente');
     WHEN OTHERS THEN   
-      RAISE_APPLICATION_ERROR ('-20003','Error: '||sqlerrm);
+      RAISE_APPLICATION_ERROR (-20003,'Error: '||sqlerrm);
   END cambiar_provincia;
     
-    
-      --BUSCAR CENTRO POR NOMBRE
+  
+  /* PROCEDIMIENTO VISUALIZAR LISTA CENTRO */
+  
+  PROCEDURE visualizar_lista_centro(
+  o_cursor OUT G_CURSOR
+  )IS
+  BEGIN
+    OPEN o_cursor FOR
+      select *
+      from centros; 
+  EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      RAISE_APPLICATION_ERROR(-20107, 'NO SE ENCONTRARON CENTROS');
+  END visualizar_lista_centro;
+  
+  /* PROCEDIMIENTO VISUALIZAR DATOS CENTRO */
+  
+  PROCEDURE visualizar_datos_centro (
+  i_idCen IN NUMBER, o_cursor OUT G_CURSOR
+  )IS
+  BEGIN  
+     OPEN o_cursor FOR 
+        SELECT IDCENTRO, NOMBRE, TELEFONO, CALLE, NUMERO, CP, CIUDAD, PROVINCIA, (SELECT COUNT(*) FROM TRABAJADOR WHERE IDCENTRO = i_idCen) TRABAJADORES 
+        FROM CENTRO C
+        WHERE idCentro = i_idCen;
+  EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      RAISE_APPLICATION_ERROR(-20009,'NO SE ENCONTRÓ EL CENTRO');
+  END;
+  
+  /* PROCEDIMIENTO VISUALIZAR DATOS CENTRO SOBRECARGADO */
+  
+  PROCEDURE visualizar_datos_centro (
+  i_nomCen IN CENTRO.NOMBRE%TYPE, o_cursor OUT G_CURSOR
+  )IS
+  BEGIN  
+     OPEN o_cursor FOR 
+        SELECT IDCENTRO, NOMBRE, TELEFONO, CALLE, NUMERO, CP, CIUDAD, PROVINCIA, (SELECT COUNT(*) FROM TRABAJADOR WHERE IDCENTRO = C.IDCENTRO) TRABAJADORES 
+        FROM CENTRO C
+        WHERE idCentro = buscar_centro_por_nombre(i_nomCen);
+  EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      RAISE_APPLICATION_ERROR(-20009,'NO SE ENCONTRÓ EL CENTRO');
+  END;
+
+  --BUSCAR CENTRO POR NOMBRE
     
   FUNCTION buscar_centro_por_nombre
     (v_nCentro IN CENTROS.NOMBRE%TYPE)
@@ -146,8 +171,8 @@ CREATE OR REPLACE PACKAGE BODY CONEXIONES IS
   RETURN v_idCentro;
   EXCEPTION
     WHEN E_CENTRO_ERRONEO THEN
-      RAISE_APPLICATION_ERROR(-20111,'No se ha encontrado el centro.');
+      RAISE_APPLICATION_ERROR(-20009,'NO SE ENCONTRÓ EL CENTRO');
   END buscar_centro_por_nombre;
  
-END CONEXIONES;
+END PAC_CENTRO;
 
